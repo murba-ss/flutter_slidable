@@ -325,12 +325,24 @@ class SlidableData extends InheritedWidget {
 
 /// A controller that keep tracks of the active [SlidableState] and close
 /// the previous one.
+///
+
+class SlideState{
+  bool isOpen;
+  bool isOpenManual;
+
+  SlideState({this.isOpen, this.isOpenManual});
+}
+
 class SlidableController {
+
+  bool isOpen = false;
   /// Creates a controller that keep tracks of the active [SlidableState] and close
   /// the previous one.
   SlidableController({
     this.onSlideAnimationChanged,
     this.onSlideIsOpenChanged,
+    this.onSlideIsStateChangedManuly
   });
 
   /// Function called when the animation changed.
@@ -338,6 +350,7 @@ class SlidableController {
 
   /// Function called when the [Slidable] open status changed.
   final ValueChanged<bool> onSlideIsOpenChanged;
+  final ValueChanged<SlideState> onSlideIsStateChangedManuly;
 
   bool _isSlideOpen;
 
@@ -370,6 +383,8 @@ class SlidableController {
   void _handleSlideIsOpenChanged() {
     if (onSlideIsOpenChanged != null && _slideAnimation != null) {
       final bool isOpen = _slideAnimation.value != 0.0;
+      print('SLIDE IS OPEN CHANGE:isOpen: $isOpen');
+      print('SLIDE IS OPEN CHANGE:_isSlideOpen: $_isSlideOpen');
       if (isOpen != _isSlideOpen) {
         _isSlideOpen = isOpen;
         onSlideIsOpenChanged(_isSlideOpen);
@@ -413,7 +428,7 @@ class Slidable extends StatefulWidget {
     bool closeOnScroll = true,
     bool enabled = true,
     SlidableDismissal dismissal,
-    SlidableController controller,
+    @required SlidableController controller,
     double fastThreshold,
   }) : this.builder(
           key: key,
@@ -461,7 +476,7 @@ class Slidable extends StatefulWidget {
     this.closeOnScroll = true,
     this.enabled = true,
     this.dismissal,
-    this.controller,
+    @required this.controller,
     double fastThreshold,
   })  : assert(actionPane != null),
         assert(direction != null),
@@ -551,6 +566,10 @@ class Slidable extends StatefulWidget {
 /// this object.
 class SlidableState extends State<Slidable>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin<Slidable> {
+
+  bool isOpen = false;
+  bool stateChangeManualVal = false;
+
   @override
   void initState() {
     super.initState();
@@ -682,14 +701,22 @@ class SlidableState extends State<Slidable>
   /// Opens the [Slidable].
   /// By default it's open the [SlideActionType.primary] action pane, but you
   /// can modify this by setting [actionType].
-  void open({SlideActionType actionType}) {
+  void open({SlideActionType actionType,@required bool stateChangeManual}) {
+    isOpen = true;
     widget.controller?.activeState = this;
+    widget.controller?.isOpen = true;
+    stateChangeManualVal = stateChangeManual;
+    widget.controller?.onSlideIsStateChangedManuly(
+        SlideState(isOpen: true, isOpenManual: stateChangeManual));
 
     if (actionType != null && _actionType != actionType) {
       setState(() {
         this.actionType = actionType;
       });
+
     }
+    print('LIBRARY: ACTION :: ${actionType}');
+    print('LIBRARY: _actionCount :: ${_actionCount}');
     if (_actionCount > 0) {
       _overallMoveController.animateTo(
         _totalActionsExtent,
@@ -700,7 +727,13 @@ class SlidableState extends State<Slidable>
   }
 
   /// Closes this [Slidable].
-  void close() {
+  void close({@required bool stateChangeManual}) {
+    isOpen = false;
+    widget.controller?.isOpen = false;
+    stateChangeManualVal = stateChangeManual;
+    widget.controller?.onSlideIsStateChangedManuly(
+        SlideState(isOpen: false, isOpenManual: stateChangeManual));
+
     if (!_overallMoveController.isDismissed) {
       if (widget.controller?.activeState == this) {
         widget.controller?.activeState = null;
@@ -719,7 +752,11 @@ class SlidableState extends State<Slidable>
   /// Dismisses this [Slidable].
   /// By default it's dismiss by showing the [SlideActionType.primary] action pane, but you
   /// can modify this by setting [actionType].
-  void dismiss({SlideActionType actionType}) {
+  void dismiss({SlideActionType actionType,@required bool stateChangeManual}) {
+    stateChangeManualVal = stateChangeManual;
+    widget.controller?.isOpen = false;
+    widget.controller?.onSlideIsStateChangedManuly(
+        SlideState(isOpen: false, isOpenManual: stateChangeManual));
     if (_dismissible) {
       _dismissing = true;
       actionType ??= _actionType;
@@ -738,7 +775,7 @@ class SlidableState extends State<Slidable>
 
     // When a scroll starts close this.
     if (_scrollPosition.isScrollingNotifier.value) {
-      close();
+      close(stateChangeManual: false);
     }
   }
 
@@ -791,15 +828,15 @@ class SlidableState extends State<Slidable>
     if (_dismissible && overallMoveAnimation.value > _totalActionsExtent) {
       // We are in a dismiss state.
       if (overallMoveAnimation.value >= _dismissThreshold) {
-        dismiss();
+        dismiss(stateChangeManual: false);
       } else {
-        open();
+        open(stateChangeManual: false);
       }
     } else if (_actionsMoveAnimation.value >= widget.showAllActionsThreshold ||
         (shouldOpen && fast)) {
-      open();
+      open(stateChangeManual: false);
     } else {
-      close();
+      close(stateChangeManual: false);
     }
   }
 
@@ -838,9 +875,9 @@ class SlidableState extends State<Slidable>
         } else {
           _dismissing = false;
           if (widget.dismissal?.closeOnCanceled == true) {
-            close();
+            close(stateChangeManual: false);
           } else {
-            open();
+            open(stateChangeManual: false);
           }
         }
       }

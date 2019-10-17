@@ -33,7 +33,7 @@ abstract class ClosableSlideAction extends StatelessWidget {
   /// that encloses the given context.
   void _handleCloseAfterTap(BuildContext context) {
     onTap?.call();
-    Slidable.of(context)?.close();
+    Slidable.of(context)?.close(stateChangeManual: false);
   }
 
   @override
