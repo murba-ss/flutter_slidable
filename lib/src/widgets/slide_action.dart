@@ -203,3 +203,96 @@ class IconSlideAction extends ClosableSlideAction {
     );
   }
 }
+
+
+class ImageSlideAction extends ClosableSlideAction {
+  /// Creates a slide action with an icon, a [caption] if set and a
+  /// background color.
+  ///
+  /// The [closeOnTap] argument must not be null.
+  const ImageSlideAction({
+    Key key,
+    this.image,
+    this.iconWidget,
+    this.caption,
+    Color color,
+    this.foregroundColor,
+    VoidCallback onTap,
+    bool closeOnTap = _kCloseOnTap,
+  })  : color = color ?? Colors.white,
+        assert(image != null || iconWidget != null,
+        'Either set icon or iconWidget.'),
+        super(
+        key: key,
+        color: color,
+        onTap: onTap,
+        closeOnTap: closeOnTap,
+      );
+
+  /// The icon to show.
+  final Image image;
+
+  /// A custom widget to represent the icon.
+  /// If both [icon] and [iconWidget] are set, they will be shown at the same
+  /// time.
+  final Widget iconWidget;
+
+  /// The caption below the icon.
+  final String caption;
+
+  /// The background color.
+  ///
+  /// Defaults to [Colors.white].
+  final Color color;
+
+  /// The color used for [icon] and [caption].
+  final Color foregroundColor;
+
+  @override
+  Widget buildAction(BuildContext context) {
+    final Color estimatedColor =
+    ThemeData.estimateBrightnessForColor(color) == Brightness.light
+        ? Colors.black
+        : Colors.white;
+
+    final List<Widget> widgets = [];
+
+    if (image != null) {
+      widgets.add(
+        Flexible(
+          child: image,
+        ),
+      );
+    }
+
+    if (iconWidget != null) {
+      widgets.add(
+        Flexible(child: iconWidget),
+      );
+    }
+
+    if (caption != null) {
+      widgets.add(
+        Flexible(
+          child: Text(
+            caption,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context)
+                .primaryTextTheme
+                .caption
+                .copyWith(color: foregroundColor ?? estimatedColor),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: widgets,
+        ),
+      ),
+    );
+  }
+}
