@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_slidable/src/widgets/fractionnally_aligned_sized_box.dart';
 import 'package:flutter_slidable/src/widgets/slidable_dismissal.dart';
@@ -323,6 +324,13 @@ class SlidableData extends InheritedWidget {
       (oldWidget.direction != direction);
 }
 
+class SlideState{
+  bool isOpen;
+  bool isOpenManual;
+  SlideActionType actionType;
+
+  SlideState({this.isOpen, this.isOpenManual, this.actionType});
+}
 /// A controller that keep tracks of the active [SlidableState] and close
 /// the previous one.
 class SlidableController {
@@ -331,8 +339,9 @@ class SlidableController {
   SlidableController({
     this.onSlideAnimationChanged,
     this.onSlideIsOpenChanged,
+    this.onSlideIsStateChangedManuly,
   });
-
+  final ValueChanged<SlideState> onSlideIsStateChangedManuly;
   /// Function called when the animation changed.
   final ValueChanged<Animation<double>> onSlideAnimationChanged;
 
@@ -551,6 +560,9 @@ class Slidable extends StatefulWidget {
 /// this object.
 class SlidableState extends State<Slidable>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin<Slidable> {
+
+  bool isStateOpen = false;
+  bool _callManual = false;
   @override
   void initState() {
     super.initState();
@@ -558,6 +570,19 @@ class SlidableState extends State<Slidable>
         AnimationController(duration: widget.movementDuration, vsync: this)
           ..addStatusListener(_handleDismissStatusChanged)
           ..addListener(_handleOverallPositionChanged);
+    _overallMoveController.addStatusListener((AnimationStatus status){
+      if (status == AnimationStatus.completed) {
+        isStateOpen = true;
+        widget.controller?.onSlideIsStateChangedManuly(
+            SlideState(isOpen: true,
+                isOpenManual: _callManual, actionType: this.actionType));
+      } else if (status == AnimationStatus.dismissed) {
+        isStateOpen = false;
+        widget.controller?.onSlideIsStateChangedManuly(
+            SlideState(isOpen: false,
+                isOpenManual: _callManual, actionType: this.actionType));
+      }
+    });
     _initAnimations();
   }
 
@@ -682,25 +707,38 @@ class SlidableState extends State<Slidable>
   /// Opens the [Slidable].
   /// By default it's open the [SlideActionType.primary] action pane, but you
   /// can modify this by setting [actionType].
-  void open({SlideActionType actionType}) {
-    widget.controller?.activeState = this;
-
-    if (actionType != null && _actionType != actionType) {
-      setState(() {
-        this.actionType = actionType;
-      });
-    }
-    if (_actionCount > 0) {
-      _overallMoveController.animateTo(
-        _totalActionsExtent,
-        curve: Curves.easeIn,
-        duration: widget.movementDuration,
-      );
+  void open({SlideActionType actionType, bool callManual = false}) {
+    _callManual = callManual;
+    if(actionType == SlideActionType.secondary || actionType == null
+        && isStateOpen){
+      close();
+    } else {
+      widget.controller?.activeState = this;
+      if (!callManual) {
+        if (actionType != null && _actionType != actionType) {
+          SchedulerBinding.instance.addPostFrameCallback((_) =>
+              setState(() {
+                this.actionType = actionType;
+              }));
+        }
+      } else {
+        if (actionType != null && _actionType != actionType) {
+          this.actionType = actionType;
+        }
+      }
+      if (_actionCount > 0) {
+        _overallMoveController.animateTo(
+          _totalActionsExtent,
+          curve: Curves.easeIn,
+          duration: widget.movementDuration,
+        );
+      }
     }
   }
 
   /// Closes this [Slidable].
-  void close() {
+  void close({bool callManual = false}) {
+    _callManual = callManual;
     if (!_overallMoveController.isDismissed) {
       if (widget.controller?.activeState == this) {
         widget.controller?.activeState = null;
@@ -720,6 +758,7 @@ class SlidableState extends State<Slidable>
   /// By default it's dismiss by showing the [SlideActionType.primary] action pane, but you
   /// can modify this by setting [actionType].
   void dismiss({SlideActionType actionType}) {
+    _callManual = false;
     if (_dismissible) {
       _dismissing = true;
       actionType ??= _actionType;
@@ -747,6 +786,9 @@ class SlidableState extends State<Slidable>
     widget.controller?.activeState = this;
     _dragExtent =
         _actionsMoveAnimation.value * _actionsDragAxisExtent * _dragExtent.sign;
+    if(_callManual){
+      _dragExtent = _dragExtent < 0 ? (_dragExtent * (-1)) : _dragExtent;
+    }
     if (_overallMoveController.isAnimating) {
       _overallMoveController.stop();
     }
